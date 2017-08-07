@@ -84,3 +84,17 @@ def unpack_colors(color, axis, normalize=True):
     if normalize:
         color = tf.div(tf.to_float(color), 255.)
     return color
+
+
+@op_scope
+def sequential_for(fn, begin, end):
+
+    def _cond(i):
+        return tf.less(i, end)
+
+    def _body(i):
+        ops = fn(i)
+        with tf.control_dependencies(ops):
+            return i + 1
+
+    return tf.while_loop(_cond, _body, [begin])

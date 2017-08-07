@@ -22,31 +22,10 @@ def barycentric(verts, p):
         [ab[1], ac[1], pa[:, 1]])
     v = [u[0] / u[2], u[1] / u[2]]
     bc = [1. - v[0] - v[1], v[1], v[0]]
-    visible = tf.logical_and(
+    valid = tf.logical_and(
         tf.abs(u[2]) >= 1.0,
-        tf.reduce_all(tf.stack(bc, axis=1) > 0, axis=1))
-    return bc, visible
-
-
-@utils.op_scope
-def sequential(fn, begin, end):
-
-    def _cond(i):
-        return tf.less(i, end)
-
-    def _body(i):
-        ops = fn(i)
-        with tf.control_dependencies(ops):
-            return i + 1
-
-    return tf.while_loop(_cond, _body, [begin])
-
-
-@utils.op_scope
-def masked_scatter_nd(ref, indices, values, mask):
-    old_values = tf.gather_nd(ref, indices)
-    updates = tf.where(mask, values, old_values)
-    return tf.scatter_nd_update(ref, indices, updates, use_locking=False)
+        tf.reduce_all(tf.stack(bc, axis=1) >= 0, axis=1))
+    return bc, valid
 
 
 class Shader(object):
@@ -55,7 +34,7 @@ class Shader(object):
     def vertex(self, unused_indices, unused_vertex_id):
         raise NotImplementedError("Vertex program not implemented.")
 
-    def fragment(self, unused_bc):
+    def fragment(self, unused_bc, unused_i):
         raise NotImplementedError("Fragment program not implemented")
 
 
@@ -66,7 +45,12 @@ class Renderer(object):
         self.width = width
         self.height = height
 
-        self.session = tf.Session()
+        config = tf.ConfigProto()
+        config.gpu_options.allow_growth = True
+        config.graph_options.optimizer_options.global_jit_level = (
+            tf.OptimizerOptions.ON_1)
+
+        self.session = tf.Session(config=config)
 
         self.commands = []
         self.args = {}
@@ -138,25 +122,29 @@ class Renderer(object):
                           tf.zeros([num_frags], dtype=tf.float32),
                           tf.ones([num_frags], dtype=tf.float32)], axis=1)
 
-            bc, visible = barycentric(verts_i, p)
+            bc, valid = barycentric(verts_i, p)
 
-            z = utils.tri_dot(
-                [verts_i[0][2], verts_i[1][2], verts_i[2][2]], bc)
-
-            output = shader.fragment(bc, i)
-
-            c = utils.pack_colors(output, 1)
+            p = tf.boolean_mask(p, valid)
+            bc = [tf.boolean_mask(bc[k], valid) for k in range(3)]
+            z = utils.tri_dot([verts_i[k][2] for k in range(3)], bc)
 
             inds = tf.to_int32(tf.stack([p[:, 1], p[:, 0]], axis=1))
-
             cur_z = tf.gather_nd(self.depth, inds)
-            visible = tf.logical_and(visible, tf.less_equal(cur_z, z))
+            visible = tf.less_equal(cur_z, z)
 
-            updates = [masked_scatter_nd(self.color, inds, c, visible),
-                       masked_scatter_nd(self.depth, inds, z, visible)]
+            inds = tf.boolean_mask(inds, visible)
+            bc = [tf.boolean_mask(bc[k], visible) for k in range(3)]
+            z = tf.boolean_mask(z, visible)
+
+            c = utils.pack_colors(shader.fragment(bc, i), 1)
+
+            updates = [
+                tf.scatter_nd_update(self.color, inds, c, use_locking=False),
+                tf.scatter_nd_update(self.depth, inds, z, use_locking=False)]
             return updates
 
-        self.commands.append(sequential(_fn, 0, num_faces))
+        updates = utils.sequential_for(_fn, 0, num_faces)
+        self.commands.append(updates)
 
         def _draw(indices_val, **kwargs):
             self.args[indices] = indices_val
