@@ -14,15 +14,23 @@ class TexturedLitShader(renderer.Shader):
     """Textured shader class."""
 
     def __init__(self):
-        self.vertices = None
-        self.normals = None
-        self.uvs = None
-        self.texture = None
-        self.light_dir = np.array([-1, -1, -1], dtype=np.float32)
-        self.ambient = np.array([0.5, 0.5, 0.5], dtype=np.float32)
-        self.diffuse = np.array([1, 1, 1], dtype=np.int32)
-        self.wvp = np.eye(4, dtype=np.float32)
-        self.iwvp = np.eye(4, dtype=np.float32)
+        self.vertices = tf.placeholder(tf.float32, [None, 3])
+        self.normals = tf.placeholder(tf.float32, [None, 3])
+        self.uvs = tf.placeholder(tf.float32, [None, 2])
+        self.texture = tf.placeholder(tf.float32, [None, None, 3])
+
+        default_light_dir = np.array([-1, -1, -1], dtype=np.float32)
+        default_ambient = np.array([0.5, 0.5, 0.5], dtype=np.float32)
+        default_diffuse = np.array([1, 1, 1], dtype=np.float32)
+        default_wvp = np.eye(4, dtype=np.float32)
+
+        self.light_dir = tf.placeholder_with_default(default_light_dir, [3])
+        self.ambient = tf.placeholder_with_default(default_ambient, [3])
+        self.diffuse = tf.placeholder_with_default(default_diffuse, [3])
+        self.wvp = tf.placeholder_with_default(default_wvp, [4, 4])
+
+        self.packed_texture = utils.pack_colors(self.texture, 2, False)
+        self.iwvp = tf.matrix_inverse(self.wvp)
 
         self.varying_uv = [None, None, None]
         self.varying_norm = [None, None, None]
@@ -49,5 +57,5 @@ class TexturedLitShader(renderer.Shader):
         l = tf.expand_dims(tf.nn.l2_normalize(self.light_dir, 0), 1)
         d = utils.clamp(tf.matmul(norm, l), 0., 1.)
         uv = utils.tri_dot(utils.tri_gather(self.varying_uv, i), bc)
-        tex = utils.unpack_colors(utils.sample(self.texture, uv), 1)
+        tex = utils.unpack_colors(utils.sample(self.packed_texture, uv), 1)
         return (self.ambient + self.diffuse * d) * tex

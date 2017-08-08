@@ -25,37 +25,37 @@ class App(object):
         # Load mesh
         mesh = pyassimp.load("data/african_head/african_head.obj")
         self.indices = mesh.meshes[0].faces
-        vertices = mesh.meshes[0].vertices
-        normals = mesh.meshes[0].normals
-        uvs = mesh.meshes[0].texturecoords[0, :, 1::-1]
+        self.vertices = mesh.meshes[0].vertices
+        self.normals = mesh.meshes[0].normals
+        self.uvs = mesh.meshes[0].texturecoords[0, :, 1::-1]
 
         # Load texture
         image = Image.open("data/african_head/african_head_diffuse.tga")
         image = image.transpose(Image.FLIP_TOP_BOTTOM)
-        texture = utils.pack_colors(
-            np.array(image, dtype=np.float32), 2, False)
-
-        # Shader
-        shader = shaders.TexturedLitShader()
-        shader.vertices = vertices
-        shader.normals = normals
-        shader.uvs = uvs
-        shader.texture = texture
+        self.texture = np.array(image, dtype=np.float32)
 
         # Create renderer
         self.rend = renderer.Renderer(width, height)
         self.rend.init()
         self.clear = self.rend.clear_fn()
-        self.draw = self.rend.draw_fn(shader)
+        self.draw = self.rend.draw_fn(shaders.TexturedLitShader())
 
-        self.last_time = time.time()
+        self.start_time = self.last_time = time.time()
 
         self.win.loop(self)
 
 
     def __call__(self):
+        theta = 0.01 * (time.time() - self.start_time)
+        wvp = utils.rotation(0., theta, 0.0)
+
         self.clear([0.1, 0.1, 0.1])
-        self.draw(self.indices)
+        self.draw(self.indices,
+                  vertices=self.vertices,
+                  normals=self.normals,
+                  uvs=self.uvs,
+                  texture=self.texture,
+                  wvp=wvp)
         image = self.rend.execute()
 
         # Display frames per second

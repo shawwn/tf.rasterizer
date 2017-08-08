@@ -13,6 +13,22 @@ FLT_MAX = 1.0e30
 
 
 @utils.op_scope
+def bounds(verts, width, height):
+    bbmin = [FLT_MAX, FLT_MAX]
+    bbmax = [FLT_MIN, FLT_MIN]
+    wh = [width - 1., height - 1.]
+    for j in range(2):
+        for i in range(3):
+            bbmin[j] = tf.minimum(bbmin[j], verts[i][:, j])
+            bbmax[j] = tf.maximum(bbmax[j], verts[i][:, j])
+        bbmin[j] = utils.clamp(bbmin[j], 0., wh[j])
+        bbmax[j] = utils.clamp(bbmax[j], 0., wh[j])
+    bbmin = tf.stack(bbmin, axis=1)
+    bbmax = tf.stack(bbmax, axis=1)
+    return bbmin, bbmax
+
+
+@utils.op_scope
 def barycentric(verts, p):
     ab = verts[2] - verts[0]
     ac = verts[1] - verts[0]
@@ -59,6 +75,8 @@ class Renderer(object):
         self.depth = tf.get_variable(
             "depth", shape=[height, width], dtype=tf.float32)
 
+        self.viewport = utils.viewport(0., 0., self.width, self.height)
+
     @utils.op_scope
     def clear_fn(self):
         color = tf.placeholder(tf.float32, [3], name="ph_color")
@@ -80,31 +98,14 @@ class Renderer(object):
     @utils.op_scope
     def draw_fn(self, shader):
         indices = tf.placeholder(tf.int32, [None, 3], name="ph_indices")
-        num_faces = tf.shape(indices)[0]
         verts = [None, None, None]
-        vp = utils.viewport(0., 0., self.width, self.height)
 
         for i in range(3):
             verts[i] = shader.vertex(indices[:, i], i)
-            verts[i] = tf.matmul(verts[i], vp, transpose_b=True,)
-            verts[i] = verts[i] / tf.expand_dims(verts[i][:, 3], 1)
+            verts[i] = tf.matmul(verts[i], self.viewport, transpose_b=True)
+            verts[i] = utils.affine_to_cartesian(verts[i])
 
-        bbmin = [None, None]
-        bbmax = [None, None]
-        wh = [self.width - 1., self.height - 1.]
-        for j in range(2):
-            bbmin[j] = tf.fill([num_faces], FLT_MAX)
-            bbmax[j] = tf.fill([num_faces], FLT_MIN)
-
-            for i in range(3):
-                bbmin[j] = tf.minimum(bbmin[j], verts[i][:, j])
-                bbmax[j] = tf.maximum(bbmax[j], verts[i][:, j])
-
-            bbmin[j] = utils.clamp(bbmin[j], 0., wh[j])
-            bbmax[j] = utils.clamp(bbmax[j], 0., wh[j])
-
-        bbmin = tf.stack(bbmin, axis=1)
-        bbmax = tf.stack(bbmax, axis=1)
+        bbmin, bbmax = bounds(verts, self.width, self.height)
 
         def _fn(i):
             bbmin_i = tf.gather(bbmin, i)
@@ -119,8 +120,7 @@ class Renderer(object):
             num_frags = tf.reduce_prod(tf.shape(x))
             p = tf.stack([tf.reshape(x, [-1]),
                           tf.reshape(y, [-1]),
-                          tf.zeros([num_frags], dtype=tf.float32),
-                          tf.ones([num_frags], dtype=tf.float32)], axis=1)
+                          tf.zeros([num_frags], dtype=tf.float32)], axis=1)
 
             bc, valid = barycentric(verts_i, p)
 
@@ -143,13 +143,14 @@ class Renderer(object):
                 tf.scatter_nd_update(self.depth, inds, z, use_locking=False)]
             return updates
 
+        num_faces = tf.shape(indices)[0]
         updates = utils.sequential_for(_fn, 0, num_faces)
         self.commands.append(updates)
 
         def _draw(indices_val, **kwargs):
             self.args[indices] = indices_val
             for k, v in kwargs.items():
-                self.args[shader.getattr(k)] = v
+                self.args[getattr(shader, k)] = v
 
         return _draw
 

@@ -27,6 +27,27 @@ def viewport(x, y, width, height):
         [0., 0., 0., 1.]], dtype=np.float32)
 
 
+def rotation(x, y, z):
+    sin_x, sin_y, sin_z = np.sin([x, y, z])
+    cos_x, cos_y, cos_z = np.cos([x, y, z])
+    return [
+        [
+            cos_x * cos_y,
+            cos_x * sin_y * sin_z - sin_x * cos_z,
+            cos_x * sin_y * cos_z + sin_x * sin_z,
+            0.
+        ],
+        [
+            sin_x * cos_y,
+            sin_x * sin_y * sin_z + cos_x * cos_z,
+            sin_x * sin_y * cos_z - cos_x * sin_z,
+            0.
+        ],
+        [-sin_y, cos_y * sin_z, cos_y * cos_z, 0.],
+        [0., 0., 0., 1.]
+    ]
+
+
 @op_scope
 def clamp(v, min=0., max=1.):
     return tf.minimum(tf.maximum(v, min), max)
@@ -98,3 +119,8 @@ def sequential_for(fn, begin, end):
             return i + 1
 
     return tf.while_loop(_cond, _body, [begin])
+
+
+@op_scope
+def affine_to_cartesian(points):
+    return points[:, :3] / tf.expand_dims(points[:, 3], 1)
