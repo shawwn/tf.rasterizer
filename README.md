@@ -2,6 +2,8 @@ An experimental project to write a 3D rasterizer entirely in Tensorflow. This pa
 
 Usage:
 ```
+brew install assimp
+brew install glfw
 pip install -r requirements.txt
 python -m main
 ```
