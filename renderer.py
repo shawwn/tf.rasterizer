@@ -6,11 +6,23 @@ from __future__ import print_function
 
 import numpy as np
 import tensorflow as tf
+import tflex
+import tflex_tpu
 import utils
+import os
+import time
+from pprint import pprint as pp
+
+from tensorflow.contrib import tpu
+from tensorflow.contrib.tpu.python.tpu import tpu_function
+from tensorflow.core.protobuf import rewriter_config_pb2
+from tensorflow.python.data.util import nest as data_nest
+from tensorflow.python.framework import graph_io
 
 FLT_MIN = -1.0e30
 FLT_MAX = 1.0e30
 
+_INITIAL_LOSS = 1e7
 
 @utils.op_scope
 def bounds(verts, width, height):
@@ -60,20 +72,24 @@ class Renderer(object):
     def __init__(self, width=800, height=600):
         self.width = width
         self.height = height
+        self.iterations = 32
+        self.need_finalize = True
 
         config = tf.ConfigProto()
-        config.gpu_options.allow_growth = True
-        config.graph_options.optimizer_options.global_jit_level = (
-            tf.OptimizerOptions.ON_1)
+        #config.gpu_options.allow_growth = True
+        #config.graph_options.optimizer_options.global_jit_level = (tf.OptimizerOptions.ON_1)
 
-        self.session = tf.Session(config=config)
+        self.session = tflex.Session(config=config)
 
         self.commands = []
         self.args = {}
+        self.blank = np.zeros(shape=[height, width, 3], dtype=np.int32)
+        self.result = tf.get_variable(
+            "result", shape=[self.iterations], dtype=tf.float32, use_resource=True)
         self.color = tf.get_variable(
-            "color", shape=[height, width], dtype=tf.int32)
+            "color", shape=[height, width], dtype=tf.int32, use_resource=True)
         self.depth = tf.get_variable(
-            "depth", shape=[height, width], dtype=tf.float32)
+            "depth", shape=[height, width], dtype=tf.float32, use_resource=True)
 
         self.viewport = utils.viewport(0., 0., self.width, self.height)
 
@@ -81,17 +97,24 @@ class Renderer(object):
     def clear_fn(self):
         color = tf.placeholder(tf.float32, [3], name="ph_color")
         depth = tf.placeholder(tf.float32, [], name="ph_depth")
+        result = tf.placeholder(tf.float32, [self.iterations], name="ph_result")
         packed_color = utils.pack_colors(color, 0)
         tiled_color = tf.fill([self.height, self.width], packed_color)
         tiled_depth = tf.fill([self.height, self.width], depth)
+        #tiled_result = tf.fill([self.iterations], result)
+        tiled_result = result
         assign_color = tf.assign(self.color, tiled_color)
         assign_depth = tf.assign(self.depth, tiled_depth)
+        assign_result = tf.assign(self.result, tiled_result)
         self.commands.append(assign_color)
         self.commands.append(assign_depth)
+        self.commands.append(assign_result)
 
-        def _clear(color_val=[0., 0., 0.], depth_val=FLT_MIN):
+        def _clear(result_val, color_val=[0., 0., 0.], depth_val=FLT_MIN):
+            assert(len(result_val) == self.iterations)
             self.args[color] = color_val
             self.args[depth] = depth_val
+            self.args[result] = result_val
 
         return _clear
 
@@ -157,9 +180,66 @@ class Renderer(object):
     def init(self):
         self.session.run(tf.global_variables_initializer())
 
+    def finalize(self):
+        self.v = tf.constant(self.blank)
+        def tpu_step(i, prev_result):
+            #import pdb; pdb.set_trace()
+            with tf.control_dependencies(self.commands):
+                color_op = utils.unpack_colors(self.color, 2, False)
+                #color_op = tf.identity(self.blank)
+                #color_op = tf.identity(self.v)
+                #color_op = tf.no_op()
+                #color_op = tf.gather(self.result, i)
+                #import pdb; pdb.set_trace()
+                #x = x.write(i, [prev_result]*3 + x.gather(indices=[i - 1])[0])
+                #z = x.read(i-1)
+                #z = tf.constant([1.0, 1.0, 1.0])
+                #import pdb; pdb.set_trace()
+                #x = x.write(i, z)
+                #x = x.write(0, 1.0)
+                #import pdb; pdb.set_trace()
+                #ta = ta.write(i, matrix[i] * 2)
+                #ta = ta.write(i, self.foo.handle.op)
+                #ta = ta.write(i, self.foo[:])
+                #return color_op + prev_result, ta
+                return color_op
+
+        #x = tf.TensorArray(dtype=tf.float32,size=1, dynamic_size=True,clear_after_read=False, element_shape=())
+        
+        #self.foo = tf.get_variable("foo", shape=[100], dtype=tf.int32, use_resource=True)
+        #matrix = tf.placeholder(tf.int32, shape=(100, 1000), name="input_matrix")
+        #matrix_rows = tf.shape(matrix)[0]
+        #ta = tf.TensorArray(dtype=tf.int32, size=matrix_rows, dynamic_size=True, element_shape=(100,))
+        #import pdb; pdb.set_trace()
+        #x = x.write(0, [0., 0., 0.])
+
+        @tpu_function.on_device_training_loop
+        def tpu_loop():
+          return tflex_tpu.repeat(self.iterations, tpu_step, [self.blank], arrays=[])
+
+        if False:
+          self.color_op = tpu_step(0, self.blank)
+        elif True:
+          (self.color_op,) = tpu.rewrite(tpu_loop, inputs=[])
+        else:
+          (self.color_op,) = tpu.shard(
+              tpu_loop,
+              inputs=[],
+              num_shards=int(os.environ['TPU_CORES']) if 'TPU_CORES' in os.environ else 8,
+              outputs_from_all_shards=False,
+              #outputs_from_all_shards=True,
+          )
+            
+        self.need_finalize = False
+
     def execute(self):
-        with tf.control_dependencies(self.commands):
-            color = utils.unpack_colors(self.color, 2, False)
-        color_val = self.session.run(color, self.args)
+        if self.need_finalize:
+            self.finalize()
+        now = time.time()
+        color_val = self.session.run(self.color_op, self.args)
+        pp(color_val)
+        print('examples/sec: ', self.iterations / (time.time() - now))
+        #color_val = self.blank
+        #import pdb; pdb.set_trace()
         self.args = {}
         return color_val

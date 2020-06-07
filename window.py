@@ -8,6 +8,8 @@ import glfw
 import numpy as np
 import OpenGL.GL as gl
 
+import time
+
 
 class Window(object):
     """Create a window for rendering."""
@@ -40,29 +42,43 @@ class Window(object):
 
     def loop(self, update_fn):
         """Loop."""
+        i = 0
+        self.last_time = time.time()
+        
         while not glfw.window_should_close(self.win):
             image = update_fn()
 
             gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
 
-            gl.glEnable(gl.GL_TEXTURE_2D)
-            gl.glBindTexture(gl.GL_TEXTURE_2D, self.tid)
-            gl.glTexSubImage2D(
-                gl.GL_TEXTURE_2D, 0, 0, 0, self.width, self.height, gl.GL_RGB,
-                gl.GL_UNSIGNED_BYTE, image)
+            if True:
+              gl.glEnable(gl.GL_TEXTURE_2D)
+              gl.glBindTexture(gl.GL_TEXTURE_2D, self.tid)
+              #gl.glTexSubImage2D(
+              #    gl.GL_TEXTURE_2D, 0, 0, 0, self.width, self.height, gl.GL_RGB,
+              #    gl.GL_UNSIGNED_BYTE, image)
+              gl.glPixelStorei(gl.GL_UNPACK_ALIGNMENT, 1)
+              gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGB, self.width, self.height, 0,
+                              gl.GL_RGB, gl.GL_UNSIGNED_BYTE, image)
 
-            gl.glBegin(gl.GL_QUADS)
-            gl.glTexCoord2f(0.0, 1.0)
-            gl.glVertex3f(-1.0, 1.0, 0.0)
-            gl.glTexCoord2f(1.0, 1.0)
-            gl.glVertex3f(1.0, 1.0, 0.0)
-            gl.glTexCoord2f(1.0, 0.0)
-            gl.glVertex3f(1.0, -1.0, 0.0)
-            gl.glTexCoord2f(0.0, 0.0)
-            gl.glVertex3f(-1.0, -1.0, 0.0)
-            gl.glEnd()
+              gl.glBegin(gl.GL_QUADS)
+              gl.glTexCoord2f(0.0, 1.0)
+              gl.glVertex3f(-1.0, 1.0, 0.0)
+              gl.glTexCoord2f(1.0, 1.0)
+              gl.glVertex3f(1.0, 1.0, 0.0)
+              gl.glTexCoord2f(1.0, 0.0)
+              gl.glVertex3f(1.0, -1.0, 0.0)
+              gl.glTexCoord2f(0.0, 0.0)
+              gl.glVertex3f(-1.0, -1.0, 0.0)
+              gl.glEnd()
 
             glfw.swap_buffers(self.win)
-            glfw.poll_events()
+            i += 1
+            if i % 1 == 0:
+              glfw.poll_events()
+            cur_time = time.time()
+            dtime = cur_time - self.last_time
+            fps = 1.0 / float(dtime + 1e-9)
+            self.last_time = cur_time
+            print("%.1f" % fps)
 
         glfw.terminate()

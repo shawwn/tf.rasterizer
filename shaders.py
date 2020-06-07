@@ -13,11 +13,11 @@ import utils
 class TexturedLitShader(renderer.Shader):
     """Textured shader class."""
 
-    def __init__(self):
+    def __init__(self, texture=None):
         self.vertices = tf.placeholder(tf.float32, [None, 3])
         self.normals = tf.placeholder(tf.float32, [None, 3])
         self.uvs = tf.placeholder(tf.float32, [None, 2])
-        self.texture = tf.placeholder(tf.float32, [None, None, 3])
+        self.texture = tf.placeholder(tf.float32, [None, None, 3]) if texture is None else texture
 
         default_light_dir = np.array([-1, -1, -1], dtype=np.float32)
         default_ambient = np.array([0.5, 0.5, 0.5], dtype=np.float32)
