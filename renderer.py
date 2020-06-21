@@ -124,9 +124,11 @@ class Renderer(object):
         verts = [None, None, None]
 
         for i in range(3):
+            #import pdb; pdb.set_trace()
             verts[i] = shader.vertex(indices[:, i], i)
-            verts[i] = tf.matmul(verts[i], self.viewport, transpose_b=True)
-            verts[i] = utils.affine_to_cartesian(verts[i])
+            with tf.control_dependencies([tf.print([i, indices[:, i], verts[i]])]):
+              verts[i] = tf.matmul(verts[i], self.viewport, transpose_b=True)
+              verts[i] = utils.affine_to_cartesian(verts[i])
 
         bbmin, bbmax = bounds(verts, self.width, self.height)
 
@@ -217,7 +219,7 @@ class Renderer(object):
         def tpu_loop():
           return tflex_tpu.repeat(self.iterations, tpu_step, [self.blank], arrays=[])
 
-        if False:
+        if True:
           self.color_op = tpu_step(0, self.blank)
         elif True:
           (self.color_op,) = tpu.rewrite(tpu_loop, inputs=[])
@@ -237,7 +239,7 @@ class Renderer(object):
             self.finalize()
         now = time.time()
         color_val = self.session.run(self.color_op, self.args)
-        pp(color_val)
+        #pp(color_val)
         print('examples/sec: ', self.iterations / (time.time() - now))
         #color_val = self.blank
         #import pdb; pdb.set_trace()

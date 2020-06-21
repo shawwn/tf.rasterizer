@@ -58,4 +58,8 @@ class TexturedLitShader(renderer.Shader):
         d = utils.clamp(tf.matmul(norm, l), 0., 1.)
         uv = utils.tri_dot(utils.tri_gather(self.varying_uv, i), bc)
         tex = utils.unpack_colors(utils.sample(self.packed_texture, uv), 1)
-        return (self.ambient + self.diffuse * d) * tex
+        result = (self.ambient + self.diffuse * d) * tex
+        #result = (self.ambient + self.diffuse * d)
+        #import pdb; pdb.set_trace()
+        #result = tf.broadcast_to([uv[0], uv[1], 0.0])
+        return result

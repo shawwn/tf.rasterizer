@@ -16,6 +16,8 @@ import window
 
 import tflex
 
+import m
+
 
 class App(object):
     """Application."""
@@ -58,7 +60,15 @@ class App(object):
         cur_time = time.time()
         elapsed = cur_time - self.start_time
         theta = 0.1 * elapsed
-        wvp = utils.rotation(0., theta, 0.0)
+        #wvp = utils.rotation(0., theta, 0.0)
+
+        #aspect = self.rend.width / self.rend.height
+        #proj = m.GrProjection.perspective(m.deg_to_rad(60.0), 1000.0, aspect, m.MPlane([0,0,-1], [0,0,-1]))
+        #wvp = proj.matrix * m.MMat4x4(utils.rotation(0., theta, 0.0))
+
+        cam = m.GrCamera();
+        cam.look_at( m.MVec3(0,0,-3), m.MVec3(0,0,0) )
+        wvp = cam.view_proj_matrix * m.MMat4x4(utils.rotation(0., theta, 0.0))
 
         self.clear([_ for _ in range(self.rend.iterations)], [0.1, 0.1, 0.1])
         self.draw(self.indices,
@@ -66,7 +76,7 @@ class App(object):
                   normals=self.normals,
                   uvs=self.uvs,
                   #texture=self.texture_in.handle,
-                  wvp=wvp)
+                  wvp=wvp.data)
         self.image = self.rend.execute()
 
         self.last_time = cur_time
