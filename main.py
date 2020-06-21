@@ -69,7 +69,7 @@ class App(object):
 
         cam = m.GrCamera();
         cam.proj = proj
-        cam.look_at( m.MVec3(0.0, 0.0, 2.5), m.MVec3(0,0,0))
+        cam.look_at( m.MVec3(0.0, 0.0, 1.5), m.MVec3(0,0,0))
         world = m.MMat4x4(utils.rotation(0., theta, 0.0))
         inv_world = world.inverse()
         wvp = cam.view_proj_matrix * world

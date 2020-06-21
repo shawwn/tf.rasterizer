@@ -127,7 +127,8 @@ class TexturedLitShader(renderer.Shader):
         # tc_z = tc[:, 2] * tc_w
         # tc_uv = tf.stack([tc_u, tc_v], 1)
         # tex = utils.unpack_colors(utils.sample(self.packed_texture, tc_uv), 1)
-        tex = utils.unpack_colors(utils.sample(self.packed_texture, uv), 1)
+        #tex = utils.unpack_colors(utils.sample(self.packed_texture, uv), 1)
+        tex = utils.sample(self.packed_texture, uv)
         result = (self.ambient + self.diffuse * d) * tex
         #result = (self.ambient + self.diffuse * d)
         #import pdb; pdb.set_trace()

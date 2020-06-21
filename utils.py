@@ -54,9 +54,49 @@ def clamp(v, min=0., max=1.):
 
 
 @op_scope
-def sample(tex, uv):
+def sample(tex, uv, mode="bilinear"):
+  assert mode in ["nearest", "bilinear"]
+  if mode == "nearest":
     uv = clamp(uv, 0., 1.) * tf.to_float(tf.shape(tex) - 1)
-    return tf.gather_nd(tex, tf.to_int32(uv))
+    return unpack_colors(tf.gather_nd(tex, tf.to_int32(uv)), 1)
+  elif mode == "bilinear":
+    # https://github.com/pytorch/pytorch/blob/f064c5aa33483061a48994608d890b968ae53fb5/aten/src/THNN/generic/SpatialGridSamplerBilinear.c#L105
+    wh = tf.shape(tex)
+    uv = clamp(uv, 0., 1.) * tf.to_float(wh - 1)
+    ix = uv[:, 0]
+    iy = uv[:, 1]
+
+    # get NE, NW, SE, SW pixel values from (x, y)
+    ix_nw = tf.to_int32(ix)
+    iy_nw = tf.to_int32(iy)
+    ix_ne = ix_nw + 1
+    iy_ne = iy_nw
+    ix_sw = ix_nw
+    iy_sw = iy_nw + 1
+    ix_se = ix_nw + 1
+    iy_se = iy_nw + 1
+
+    sub = lambda a, b: tf.to_float(a) - tf.to_float(b)
+    get = lambda u, v: unpack_colors(tf.gather_nd(tex, tf.stack([
+      clamp(u, 0, wh[0] - 1),
+      clamp(v, 0, wh[1] - 1)], 1)), 1)
+
+    # get surfaces to each neighbor:
+    nw = sub(ix_se , ix)    * sub(iy_se , iy);
+    ne = sub(ix    , ix_sw) * sub(iy_sw , iy);
+    sw = sub(ix_ne , ix)    * sub(iy    , iy_ne);
+    se = sub(ix    , ix_nw) * sub(iy    , iy_nw);
+
+    nw_val = get(ix_nw, iy_nw)
+    ne_val = get(ix_ne, iy_ne)
+    sw_val = get(ix_sw, iy_sw)
+    se_val = get(ix_se, iy_se)
+    a = lambda x: x[:, tf.newaxis]
+    out = nw_val * a(nw)
+    out += ne_val * a(ne)
+    out += sw_val * a(sw)
+    out += se_val * a(se)
+    return out
 
 
 @op_scope
