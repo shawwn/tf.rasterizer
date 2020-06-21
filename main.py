@@ -22,8 +22,8 @@ import m
 class App(object):
     """Application."""
 
-    #def __init__(self, width=800, height=600):
-    def __init__(self, width=256, height=256):
+    #def __init__(self, width=256, height=256):
+    def __init__(self, width=800, height=600):
         # Create a window
         self.win = window.Window(width, height, "App")
 
@@ -59,7 +59,7 @@ class App(object):
     def __call__(self):
         cur_time = time.time()
         elapsed = cur_time - self.start_time
-        theta = 0.1 * elapsed
+        theta = 0.3 * elapsed
         #wvp = utils.rotation(0., theta, 0.0)
 
         #aspect = self.rend.width / self.rend.height

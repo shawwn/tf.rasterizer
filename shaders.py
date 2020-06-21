@@ -33,6 +33,7 @@ class TexturedLitShader(renderer.Shader):
         self.iwvp = tf.matrix_inverse(self.wvp)
 
         self.varying_uv = [None, None, None]
+        self.varying_tc = [None, None, None]
         self.varying_norm = [None, None, None]
 
     @utils.op_scope
@@ -41,23 +42,39 @@ class TexturedLitShader(renderer.Shader):
         vertices = tf.gather(self.vertices, indices)
         normals = tf.gather(self.normals, indices)
         uvs = tf.gather(self.uvs, indices)
+        #import pdb; pdb.set_trace()
         vertices = tf.concat([vertices, tf.ones([num_verts, 1])], 1)
         normals = tf.concat([normals, tf.zeros([num_verts, 1])], 1)
         self.varying_uv[vertex_id] = uvs
         self.varying_norm[vertex_id] = tf.matmul(
             normals, self.iwvp, transpose_b=True)[:, :3]
-        return tf.matmul(vertices, self.wvp, transpose_b=True)
+        result = tf.matmul(vertices, self.wvp, transpose_b=True)
+        w = result[:, 3]
+        z = result[:, 2] / w
+        u_z = uvs[:, 0] / w
+        v_z = uvs[:, 1] / w
+        i_z = 1.0 / w
+        texcoords = tf.stack([u_z, v_z, i_z], 1)
+        self.varying_tc[vertex_id] = texcoords
+        return result
 
     @utils.op_scope
     def fragment(self, bc, i):
         num_frags = tf.shape(bc[0])[0]
+        #import pdb; pdb.set_trace()
         bc = utils.tri_expand_dims(bc, 1)
         norm = utils.tri_dot(utils.tri_gather(self.varying_norm, i), bc)
         norm = tf.nn.l2_normalize(norm, 1)
         l = tf.expand_dims(tf.nn.l2_normalize(self.light_dir, 0), 1)
         d = utils.clamp(tf.matmul(norm, l), 0., 1.)
         uv = utils.tri_dot(utils.tri_gather(self.varying_uv, i), bc)
-        tex = utils.unpack_colors(utils.sample(self.packed_texture, uv), 1)
+        tc = utils.tri_dot(utils.tri_gather(self.varying_tc, i), bc)
+        #import pdb; pdb.set_trace()
+        tc_z = 1.0 / tc[:, 2]
+        tc_u = tc[:, 0] * tc_z
+        tc_v = tc[:, 1] * tc_z
+        tc_uv = tf.stack([tc_u, tc_v], 1)
+        tex = utils.unpack_colors(utils.sample(self.packed_texture, tc_uv), 1)
         result = (self.ambient + self.diffuse * d) * tex
         #result = (self.ambient + self.diffuse * d)
         #import pdb; pdb.set_trace()

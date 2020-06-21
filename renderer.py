@@ -55,6 +55,40 @@ def barycentric(verts, p):
         tf.reduce_all(tf.stack(bc, axis=1) >= 0, axis=1))
     return bc, valid
 
+def edge_function(a, b, c):
+  return (c[0] - a[0]) * (b[1] - a[1]) - (c[1] - a[1]) * (b[0] - a[0]);
+
+@utils.op_scope
+def barycentric2(verts, p):
+  v0 = verts[0]
+  v1 = verts[1]
+  v2 = verts[2]
+  area = edge_function(v0, v1, v2)
+  w0 = edge_function(v1, v2, p); 
+  w1 = edge_function(v2, v0, p); 
+  w2 = edge_function(v0, v1, p); 
+  w0 /= area
+  w1 /= area
+  w2 /= area
+  c0 = [1, 0, 0]
+  c1 = [0, 1, 0]
+  c2 = [0, 0, 1]
+  #r = w0 * c0[0] + w1 * c1[0] + w2 * c2[0]; 
+  #g = w0 * c0[1] + w1 * c1[1] + w2 * c2[1]; 
+  #b = w0 * c0[2] + w1 * c1[2] + w2 * c2[2]; 
+  #u = w1 - w0
+  #v = w2 - w0
+  bc = [w0 / area, w1 / area, w2 / area]
+  #bc = [r, g, b]
+  #valid = w0 >= 0 and w1 >= 0 and w2 >= 0
+  valid = tf.logical_and(
+      tf.greater_equal(w0, 0.0),
+      tf.logical_and(
+        tf.greater_equal(w1, 0.0),
+        tf.greater_equal(w2, 0.0)))
+  #valid = tf.reduce_all(tf.stack([w0, w1, w2], axis=1) >= 0, axis=1)
+  return bc, tf_prn(valid, w0, w1, w2, area)
+
 
 class Shader(object):
     """Shader class."""
@@ -65,6 +99,10 @@ class Shader(object):
     def fragment(self, unused_bc, unused_i):
         raise NotImplementedError("Fragment program not implemented")
 
+@utils.op_scope
+def tf_prn(x, *args):
+  with tf.control_dependencies([tf.print(*args)]):
+    return tf.identity(x)
 
 class Renderer(object):
     """Renderer class."""
@@ -124,11 +162,14 @@ class Renderer(object):
         verts = [None, None, None]
 
         for i in range(3):
-            #import pdb; pdb.set_trace()
             verts[i] = shader.vertex(indices[:, i], i)
-            with tf.control_dependencies([tf.print([i, indices[:, i], verts[i]])]):
-              verts[i] = tf.matmul(verts[i], self.viewport, transpose_b=True)
-              verts[i] = utils.affine_to_cartesian(verts[i])
+            #import pdb; pdb.set_trace()
+            #with tf.control_dependencies([tf.print([i, indices[:, i], verts[i]])]):
+            #with tf.control_dependencies([tf.print([i, verts[i][0]])]):
+            verts[i] = tf.matmul(verts[i], self.viewport, transpose_b=True)
+            verts[i] = utils.affine_to_cartesian(verts[i])
+        #with tf.control_dependencies([tf.print([i, verts[0][0]])]):
+        #  verts[0] = tf.identity(verts[0])
 
         bbmin, bbmax = bounds(verts, self.width, self.height)
 
@@ -148,6 +189,8 @@ class Renderer(object):
                           tf.zeros([num_frags], dtype=tf.float32)], axis=1)
 
             bc, valid = barycentric(verts_i, p)
+
+            #bc = tf_prn(bc, bbmin_i, bbmax_i, i, [0, verts_i[0], tf.shape(bc[0])], [1, verts_i[1], tf.shape(bc[1])], [2, verts_i[2], tf.shape(bc[2])], tf.shape(p))
 
             p = tf.boolean_mask(p, valid)
             bc = [tf.boolean_mask(bc[k], valid) for k in range(3)]
