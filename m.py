@@ -5,11 +5,15 @@ import math
 def deg_to_rad(deg):
   return deg * np.pi / 180.0
 
+def inv_sqrt(x):
+  return 1.0 / np.sqrt(x)
 
 def _data(v, dtype):
   #if isinstance(v, np.ndarray);
   #  return v
-  if isinstance(v, MData):
+  #if isinstance(v, MData):
+  #  return v._data
+  if hasattr(v, '_data'):
     return v._data
   if isinstance(v, list):
     return np.array(v, dtype=dtype)
@@ -108,7 +112,7 @@ class MVec3(MData):
     return np.dot(self._data, _data(v, self._data.dtype))
 
   @property
-  def mag_sq(self):
+  def mag_sqr(self):
     x = self._data[0]
     y = self._data[1]
     z = self._data[2]
@@ -116,7 +120,7 @@ class MVec3(MData):
 
   @property
   def mag(self):
-    return np.sqrt(self.mag_sq)
+    return np.sqrt(self.mag_sqr)
 
   def normalize(self):
     invMag = 1.0 / self.mag
@@ -309,13 +313,163 @@ class MMat4x4(MData):
   def __mul__(self, m):
     return self.__class__(np.matmul(self._data, _data(m, self._data.dtype)))
 
-  def inverse(self, output):
+  def inverse(self, output=None):
+    if output is None:
+      r = self.__class__()
+      assert self.inverse(r)
+      return r
     try:
       m = np.linalg.inv(self._data)
       output.assign(m)
       return True
     except np.linalg.LinAlgError:
       return False
+
+  def get_rotate(self, mat):
+    _data = self._data.reshape([-1])
+    xInvScale = inv_sqrt( _data[ 0 ]*_data[ 0 ] + _data[ 1 ]*_data[ 1 ] + _data[ 2 ]*_data[ 2 ] )
+    yInvScale = inv_sqrt( _data[ 4 ]*_data[ 4 ] + _data[ 5 ]*_data[ 5 ] + _data[ 6 ]*_data[ 6 ] )
+    zInvScale = inv_sqrt( _data[ 8 ]*_data[ 8 ] + _data[ 9 ]*_data[ 9 ] + _data[ 10 ]*_data[ 10 ] )
+
+    mat[ 0,0 ] = xInvScale*_data[ 0 ]
+    mat[ 0,1 ] = xInvScale*_data[ 1 ]
+    mat[ 0,2 ] = xInvScale*_data[ 2 ]
+
+    mat[ 1,0 ] = yInvScale*_data[ 4 ]
+    mat[ 1,1 ] = yInvScale*_data[ 5 ]
+    mat[ 1,2 ] = yInvScale*_data[ 6 ]
+
+    mat[ 2,0 ] = zInvScale*_data[ 8 ]
+    mat[ 2,1 ] = zInvScale*_data[ 9 ]
+    mat[ 2,2 ] = zInvScale*_data[ 10 ]
+
+  @property
+  def rotate(self):
+    _data = self._data.reshape([-1])
+    xInvScale = inv_sqrt( _data[ 0 ]*_data[ 0 ] + _data[ 1 ]*_data[ 1 ] + _data[ 2 ]*_data[ 2 ] )
+    yInvScale = inv_sqrt( _data[ 4 ]*_data[ 4 ] + _data[ 5 ]*_data[ 5 ] + _data[ 6 ]*_data[ 6 ] )
+    zInvScale = inv_sqrt( _data[ 8 ]*_data[ 8 ] + _data[ 9 ]*_data[ 9 ] + _data[ 10 ]*_data[ 10 ] )
+    return MMat3x3( xInvScale*_data[ 0 ], xInvScale*_data[ 1 ], xInvScale*_data[ 2 ],
+                    yInvScale*_data[ 4 ], yInvScale*_data[ 5 ], yInvScale*_data[ 6 ],
+                    zInvScale*_data[ 8 ], zInvScale*_data[ 9 ], zInvScale*_data[ 10 ] );
+
+  @rotate.setter
+  def rotate(self, rot):
+    scale = self.scale
+    self._data[ 0, 0 ] = scale.x * rot[ 0, 0 ]
+    self._data[ 0, 1 ] = scale.x * rot[ 0, 1 ]
+    self._data[ 0, 2 ] = scale.x * rot[ 0, 2 ]
+    self._data[ 1, 0 ] = scale.y * rot[ 1, 0 ]
+    self._data[ 1, 1 ] = scale.y * rot[ 1, 1 ]
+    self._data[ 1, 2 ] = scale.y * rot[ 1, 2 ]
+    self._data[ 2, 0 ] = scale.z * rot[ 2, 0 ]
+    self._data[ 2, 1 ] = scale.z * rot[ 2, 1 ]
+    self._data[ 2, 2 ] = scale.z * rot[ 2, 2 ]
+
+  def get_translate(self, pos):
+    _data = self._data.reshape([-1])
+    pos.x = _data[ 3 ]
+    pos.y = _data[ 7 ]
+    pos.z = _data[ 11 ]
+
+  @property
+  def translate(self):
+    _data = self._data.reshape([-1])
+    return MVec3( _data[ 3 ], _data[ 7 ], _data[ 11 ] )
+
+  @translate.setter
+  def translate(self, pos):
+    self._data[ 0, 3 ] = pos.x
+    self._data[ 1, 3 ] = pos.y
+    self._data[ 2, 3 ] = pos.z
+
+  def get_scale_sqr(self, scale):
+    # extract the scale of the matrix.  Ensure that the rotational component of the matrix is of uniform scaling.
+    _data = self._data.reshape([-1])
+    x = MVec3( _data[ 0 ], _data[ 1 ], _data[ 2 ] );
+    y = MVec3( _data[ 4 ], _data[ 5 ], _data[ 6 ] );
+    z = MVec3( _data[ 8 ], _data[ 9 ], _data[ 10 ] );
+
+    # return the scales of the axes.
+    scale.x = x.mag_sqr
+    scale.y = y.mag_sqr
+    scale.z = z.mag_sqr
+
+  @property
+  def scale_sqr(self):
+    # extract the scale of the matrix.  Ensure that the rotational component of the matrix is of uniform scaling.
+    x = MVec3( _data[ 0 ], _data[ 1 ], _data[ 2 ] );
+    y = MVec3( _data[ 4 ], _data[ 5 ], _data[ 6 ] );
+    z = MVec3( _data[ 8 ], _data[ 9 ], _data[ 10 ] );
+
+    # return the scales of the axes.
+    return MVec3( x.mag_sqr, y.mag_sqr, z.mag_sqr );
+    
+
+  def get_scale(self, scale):
+    # extract the scale of the matrix.  Ensure that the rotational component of the matrix is of uniform scaling.
+    _data = self._data.reshape([-1])
+    x = MVec3( _data[ 0 ], _data[ 1 ], _data[ 2 ] );
+    y = MVec3( _data[ 4 ], _data[ 5 ], _data[ 6 ] );
+    z = MVec3( _data[ 8 ], _data[ 9 ], _data[ 10 ] );
+
+    # return the scales of the axes.
+    scale.x = x.mag
+    scale.y = y.mag
+    scale.z = z.mag
+
+  @property
+  def scale(self):
+    _data = self._data.reshape([-1])
+    # extract the scale of the matrix.  Ensure that the rotational component of the matrix is of uniform scaling.
+    x = MVec3( _data[ 0 ], _data[ 1 ], _data[ 2 ] );
+    y = MVec3( _data[ 4 ], _data[ 5 ], _data[ 6 ] );
+    z = MVec3( _data[ 8 ], _data[ 9 ], _data[ 10 ] );
+
+    # return the scales of the axes.
+    return MVec3( x.mag, y.mag, z.mag );
+
+  @scale.setter
+  def scale(self, scale):
+    _data = self._data.reshape([-1])
+    # orthonormalize the matrix axes.
+    x = MVec3( _data[ 0 ], _data[ 1 ], _data[ 2 ] );
+    y = MVec3( _data[ 4 ], _data[ 5 ], _data[ 6 ] );
+    z = MVec3( _data[ 8 ], _data[ 9 ], _data[ 10 ] );
+    x.normalize()
+    y.normalize()
+    z.normalize()
+    x = x * scale.x
+    y = y * scale.y
+    z = z * scale.z
+    self.set_axes(x, y, z)
+    
+  def set_axes(self, x, y, z):
+    self._data[ 0, 0 ] = x.x
+    self._data[ 0, 1 ] = x.y
+    self._data[ 0, 2 ] = x.z
+    self._data[ 1, 0 ] = y.x
+    self._data[ 1, 1 ] = y.y
+    self._data[ 1, 2 ] = y.z
+    self._data[ 2, 0 ] = z.x
+    self._data[ 2, 1 ] = z.y
+    self._data[ 2, 2 ] = z.z
+
+  def set_orientation(self, side, forward):
+    # compute the new matrix axes.
+    x = MVec3( side.normalized() )
+    z = MVec3( forward.normalized() )
+    y = MVec3( z.cross( x ).normalized() )
+    x = y.cross( z ).normalized()
+
+    # scale them.
+    scale = self.scale
+    x = x * scale.x
+    y = y * scale.y
+    z = z * scale.z
+
+    # set them.
+    self.set_axes( x, y, z )
 
 
 class MPlane:
@@ -585,7 +739,7 @@ class GrCamera:
 
   def look_at(self, pos, target, world_up=None):
     zdir = pos - target
-    assert zdir.mag_sq > 0.00001
+    assert zdir.mag_sqr > 0.00001
 
     # mark as dirty.
     self._dirty = True

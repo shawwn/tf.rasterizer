@@ -40,21 +40,6 @@ def bounds(verts, width, height):
     return bbmin, bbmax
 
 
-@utils.op_scope
-def barycentric(verts, p):
-    ab = verts[2] - verts[0]
-    ac = verts[1] - verts[0]
-    pa = verts[0] - p
-    u = utils.tri_cross(
-        [ab[0], ac[0], pa[:, 0]],
-        [ab[1], ac[1], pa[:, 1]])
-    v = [u[0] / u[2], u[1] / u[2]]
-    bc = [1. - v[0] - v[1], v[1], v[0]]
-    valid = tf.logical_and(
-        tf.abs(u[2]) >= 1.0,
-        tf.reduce_all(tf.stack(bc, axis=1) >= 0, axis=1))
-    return bc, valid
-
 def edge_function(a, b, c):
   return (c[0] - a[0]) * (b[1] - a[1]) - (c[1] - a[1]) * (b[0] - a[0]);
 
@@ -88,6 +73,22 @@ def barycentric2(verts, p):
         tf.greater_equal(w2, 0.0)))
   #valid = tf.reduce_all(tf.stack([w0, w1, w2], axis=1) >= 0, axis=1)
   return bc, tf_prn(valid, w0, w1, w2, area)
+
+
+@utils.op_scope
+def barycentric(verts, p):
+    ab = verts[2] - verts[0]
+    ac = verts[1] - verts[0]
+    pa = verts[0] - p
+    u = utils.tri_cross(
+        [ab[0], ac[0], pa[:, 0]],
+        [ab[1], ac[1], pa[:, 1]])
+    v = [u[0] / u[2], u[1] / u[2]]
+    bc = [1. - v[0] - v[1], v[1], v[0]]
+    valid = tf.logical_and(
+        tf.abs(u[2]) >= 1.0,
+        tf.reduce_all(tf.stack(bc, axis=1) >= 0, axis=1))
+    return bc, valid
 
 
 class Shader(object):
@@ -160,6 +161,7 @@ class Renderer(object):
     def draw_fn(self, shader):
         indices = tf.placeholder(tf.int32, [None, 3], name="ph_indices")
         verts = [None, None, None]
+        ndc = [None, None, None]
 
         for i in range(3):
             verts[i] = shader.vertex(indices[:, i], i)
@@ -167,6 +169,7 @@ class Renderer(object):
             #with tf.control_dependencies([tf.print([i, indices[:, i], verts[i]])]):
             #with tf.control_dependencies([tf.print([i, verts[i][0]])]):
             verts[i] = tf.matmul(verts[i], self.viewport, transpose_b=True)
+            ndc[i] = verts[i]
             verts[i] = utils.affine_to_cartesian(verts[i])
         #with tf.control_dependencies([tf.print([i, verts[0][0]])]):
         #  verts[0] = tf.identity(verts[0])
@@ -179,6 +182,9 @@ class Renderer(object):
             verts_i = [tf.gather(verts[0], i),
                        tf.gather(verts[1], i),
                        tf.gather(verts[2], i)]
+            # ndc_i = [tf.gather(ndc[0], i),
+            #          tf.gather(ndc[1], i),
+            #          tf.gather(ndc[2], i)]
 
             iround = lambda x: tf.floor(x + 0.5)
 
