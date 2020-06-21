@@ -14,14 +14,15 @@ import time
 class Window(object):
     """Create a window for rendering."""
 
-    def __init__(self, width, height, title):
+    def __init__(self, width, height, title, upscale=1):
         self.width = width
         self.height = height
+        self.upscale = upscale
 
         if not glfw.init():
             return
 
-        self.win = glfw.create_window(width, height, title, None, None)
+        self.win = glfw.create_window(width*upscale, height*upscale, title, None, None)
         if not self.win:
             glfw.terminate()
             return
@@ -36,9 +37,9 @@ class Window(object):
         gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGB, width, height, 0,
                         gl.GL_RGB, gl.GL_UNSIGNED_BYTE, zeros)
         gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER,
-                           gl.GL_LINEAR)
+                           gl.GL_NEAREST)
         gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER,
-                           gl.GL_LINEAR)
+                           gl.GL_NEAREST)
 
     def loop(self, update_fn):
         """Loop."""
@@ -60,15 +61,23 @@ class Window(object):
               gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGB, self.width, self.height, 0,
                               gl.GL_RGB, gl.GL_UNSIGNED_BYTE, image)
 
+              halfw = -0.5 / self.width
+              halfh = -0.5 / self.height
+
               gl.glBegin(gl.GL_QUADS)
-              gl.glTexCoord2f(0.0, 0.0)
+
+              gl.glTexCoord2f(-halfw+0.0, -halfh+0.0)
               gl.glVertex3f(-1.0, 1.0, 0.0)
-              gl.glTexCoord2f(1.0, 0.0)
+
+              gl.glTexCoord2f(-halfw+1.0, -halfh+0.0)
               gl.glVertex3f(1.0, 1.0, 0.0)
-              gl.glTexCoord2f(1.0, 1.0)
+
+              gl.glTexCoord2f(-halfw+1.0, -halfh+1.0)
               gl.glVertex3f(1.0, -1.0, 0.0)
-              gl.glTexCoord2f(0.0, 1.0)
+
+              gl.glTexCoord2f(-halfw+0.0, -halfh+1.0)
               gl.glVertex3f(-1.0, -1.0, 0.0)
+
               gl.glEnd()
 
             glfw.swap_buffers(self.win)

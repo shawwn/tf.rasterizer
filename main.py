@@ -22,10 +22,11 @@ import m
 class App(object):
     """Application."""
 
-    #def __init__(self, width=256, height=256):
-    def __init__(self, width=1024, height=768):
+    #def __init__(self, width=256, height=256, upscale=1):
+    #def __init__(self, width=1024, height=720, upscale=1):
+    def __init__(self, width=16, height=16, upscale=8):
         # Create a window
-        self.win = window.Window(width, height, "App")
+        self.win = window.Window(width, height, "App", upscale=upscale)
 
         # Load mesh
         #mesh = pyassimp.load("data/african_head/african_head.obj")
@@ -66,13 +67,15 @@ class App(object):
         #wvp = utils.rotation(0., theta, 0.0)
 
         aspect = self.rend.width / self.rend.height
-        proj = m.GrProjection.perspective(m.deg_to_rad(60.0), 1000.0, aspect, m.MPlane([0,0,-1], [0,0,-1]))
+        proj = m.GrProjection()
+        #proj = m.GrProjection.perspective(m.deg_to_rad(60.0), 1000.0, aspect, m.MPlane([0,0,-1], [0,0,-1]))
         #wvp = proj.matrix * m.MMat4x4(utils.rotation(0., theta, 0.0))
 
         cam = m.GrCamera();
         cam.proj = proj
         cam.look_at( m.MVec3(0.0, 0.0, 1.5), m.MVec3(0,0,0))
-        world = m.MMat4x4(utils.rotation(0., theta, 0.0))
+        #world = m.MMat4x4(utils.rotation(0., theta, 0.0))
+        world = m.MMat4x4(utils.rotation(0., m.deg_to_rad(90.0), 0.0))
         inv_world = world.inverse()
         wvp = cam.view_proj_matrix * world
         norm = cam.normal_matrix

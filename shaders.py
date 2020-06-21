@@ -52,7 +52,7 @@ class TexturedLitShader(renderer.Shader):
         uvs = tf.gather(self.uvs, indices)
         #uvs -= 0.5
         #uvs /= 16.0
-        uvs *= 3.0
+        #uvs *= 3.0
         #uvs += 0.5 / 10.0
         #uvs /= 2.0
         vertices = tf.concat([vertices, tf.ones([num_verts, 1])], 1)
