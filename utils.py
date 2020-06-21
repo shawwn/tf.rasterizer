@@ -76,7 +76,7 @@ def sample(tex, uv, mode="bilinear", wrap_mode="reflect"):
     clamp(iround(v), 0, wh[1] - 1),
     ], 1)), 1)
   if mode == "nearest":
-    uv = wrap(uv, wrap_mode) * tf.to_float(tf.shape(tex))
+    uv = wrap(uv, wrap_mode) * tf.to_float(wh)
     u = uv[:, 0]
     v = uv[:, 1]
     return get(u, v)
