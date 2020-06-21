@@ -121,6 +121,7 @@ class Renderer(object):
         self.session = tflex.Session(config=config)
 
         self.commands = []
+        self.results = []
         self.args = {}
         self.blank = np.zeros(shape=[height, width, 3], dtype=np.int32)
         self.result = tf.get_variable(
@@ -176,7 +177,7 @@ class Renderer(object):
 
         bbmin, bbmax = bounds(verts, self.width, self.height)
 
-        def _fn(i):
+        def _fn(i, color, depth):
             bbmin_i = tf.gather(bbmin, i)
             bbmax_i = tf.gather(bbmax, i)
             verts_i = [tf.gather(verts[0], i),
@@ -205,7 +206,8 @@ class Renderer(object):
             z = utils.tri_dot([verts_i[k][2] for k in range(3)], bc)
 
             inds = tf.to_int32(tf.stack([p[:, 1], p[:, 0]], axis=1))
-            cur_z = tf.gather_nd(self.depth, inds)
+            #cur_z = tf.gather_nd(self.depth, inds)
+            cur_z = tf.gather_nd(depth, inds)
             visible = tf.less_equal(cur_z, z)
 
             inds = tf.boolean_mask(inds, visible)
@@ -214,14 +216,20 @@ class Renderer(object):
 
             c = utils.pack_colors(shader.fragment(bc, i), 1)
 
-            updates = [
-                tf.scatter_nd_update(self.color, inds, c, use_locking=False),
-                tf.scatter_nd_update(self.depth, inds, z, use_locking=False)]
-            return updates
+            if False:
+              updates = [
+                  tf.scatter_nd_update(self.color, inds, c, use_locking=False),
+                  tf.scatter_nd_update(self.depth, inds, z, use_locking=False)
+              ]
+              return updates, self.color, self.depth
+            else:
+              updates = [tf.no_op()]
+              return updates, tf.tensor_scatter_update(color, inds, c), tf.tensor_scatter_update(depth, inds, z)
+
 
         num_faces = tf.shape(indices)[0]
-        updates = utils.sequential_for(_fn, 0, num_faces)
-        self.commands.append(updates)
+        updates = utils.sequential_for(_fn, 0, num_faces, self.color, self.depth)
+        self.results.append(updates)
 
         def _draw(indices_val, **kwargs):
             self.args[indices] = indices_val
@@ -237,25 +245,31 @@ class Renderer(object):
         self.v = tf.constant(self.blank)
         def tpu_step(i, prev_result):
             #import pdb; pdb.set_trace()
-            with tf.control_dependencies(self.commands):
-                color_op = utils.unpack_colors(self.color, 2, False)
-                #color_op = tf.identity(self.blank)
-                #color_op = tf.identity(self.v)
-                #color_op = tf.no_op()
-                #color_op = tf.gather(self.result, i)
-                #import pdb; pdb.set_trace()
-                #x = x.write(i, [prev_result]*3 + x.gather(indices=[i - 1])[0])
-                #z = x.read(i-1)
-                #z = tf.constant([1.0, 1.0, 1.0])
-                #import pdb; pdb.set_trace()
-                #x = x.write(i, z)
-                #x = x.write(0, 1.0)
-                #import pdb; pdb.set_trace()
-                #ta = ta.write(i, matrix[i] * 2)
-                #ta = ta.write(i, self.foo.handle.op)
-                #ta = ta.write(i, self.foo[:])
-                #return color_op + prev_result, ta
-                return color_op
+            if True:
+                with tf.control_dependencies(self.commands):
+                  _, color, depth = self.results[0]
+                  color_op = utils.unpack_colors(color, 2, False)
+                  return color_op
+            else:
+                with tf.control_dependencies(self.commands):
+                    color_op = utils.unpack_colors(self.color, 2, False)
+                    #color_op = tf.identity(self.blank)
+                    #color_op = tf.identity(self.v)
+                    #color_op = tf.no_op()
+                    #color_op = tf.gather(self.result, i)
+                    #import pdb; pdb.set_trace()
+                    #x = x.write(i, [prev_result]*3 + x.gather(indices=[i - 1])[0])
+                    #z = x.read(i-1)
+                    #z = tf.constant([1.0, 1.0, 1.0])
+                    #import pdb; pdb.set_trace()
+                    #x = x.write(i, z)
+                    #x = x.write(0, 1.0)
+                    #import pdb; pdb.set_trace()
+                    #ta = ta.write(i, matrix[i] * 2)
+                    #ta = ta.write(i, self.foo.handle.op)
+                    #ta = ta.write(i, self.foo[:])
+                    #return color_op + prev_result, ta
+                    return color_op
 
         #x = tf.TensorArray(dtype=tf.float32,size=1, dynamic_size=True,clear_after_read=False, element_shape=())
         

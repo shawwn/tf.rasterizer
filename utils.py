@@ -108,17 +108,17 @@ def unpack_colors(color, axis, normalize=True):
 
 
 @op_scope
-def sequential_for(fn, begin, end):
+def sequential_for(fn, begin, end, *args):
 
-    def _cond(i):
+    def _cond(i, *xs):
         return tf.less(i, end)
 
-    def _body(i):
-        ops = fn(i)
+    def _body(i, *xs):
+        ops, *ys = fn(i, *xs)
         with tf.control_dependencies(ops):
-            return i + 1
+            return [i + 1] + list(ys)
 
-    return tf.while_loop(_cond, _body, [begin])
+    return tf.while_loop(_cond, _body, [begin] + list(args))
 
 
 @op_scope
