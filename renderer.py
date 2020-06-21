@@ -180,8 +180,10 @@ class Renderer(object):
                        tf.gather(verts[1], i),
                        tf.gather(verts[2], i)]
 
-            x, y = tf.meshgrid(tf.range(bbmin_i[0], bbmax_i[0]),
-                               tf.range(bbmin_i[1], bbmax_i[1]))
+            iround = lambda x: tf.floor(x + 0.5)
+
+            x, y = tf.meshgrid(tf.range(iround(bbmin_i[0]), iround(bbmax_i[0]) + 1.0),
+                               tf.range(iround(bbmin_i[1]), iround(bbmax_i[1]) + 1.0))
 
             num_frags = tf.reduce_prod(tf.shape(x))
             p = tf.stack([tf.reshape(x, [-1]),
