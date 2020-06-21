@@ -37,7 +37,9 @@ class App(object):
         self.uvs = mesh.meshes[0].texturecoords[0, :, 1::-1]
 
         # Load texture
-        image = Image.open("data/african_head/african_head_diffuse.tga")#.resize([32,32])
+        #image = Image.open("data/african_head/african_head_diffuse.tga")#.resize([32,32])
+        image = Image.open("data/smile.png")
+        image = image.convert("RGB")
         image = image.transpose(Image.FLIP_TOP_BOTTOM)
         self.texture = np.array(image, dtype=np.float32)
 

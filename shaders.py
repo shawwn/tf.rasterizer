@@ -50,6 +50,11 @@ class TexturedLitShader(renderer.Shader):
         vertices = tf.gather(self.vertices, indices)
         normals = tf.gather(self.normals, indices)
         uvs = tf.gather(self.uvs, indices)
+        #uvs -= 0.5
+        #uvs /= 16.0
+        uvs *= 3.0
+        #uvs += 0.5 / 10.0
+        #uvs /= 2.0
         vertices = tf.concat([vertices, tf.ones([num_verts, 1])], 1)
         normals = tf.concat([normals, tf.zeros([num_verts, 1])], 1)
         pos = tf.matmul(vertices, self.wvp, transpose_b=True)

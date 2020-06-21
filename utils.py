@@ -50,25 +50,45 @@ def rotation(x, y, z):
 
 @op_scope
 def clamp(v, min=0., max=1.):
-    return tf.minimum(tf.maximum(v, min), max)
-
+    #return tf.minimum(tf.maximum(v, min), max)
+    return tf.clip_by_value(v, min, max)
 
 @op_scope
-def sample(tex, uv, mode="bilinear"):
+def wrap(v, mode):
+  assert mode in ["clamp", "wrap", "reflect"]
+  if mode == "wrap":
+    return tf.floormod(v, 1.0)
+  elif mode == "reflect":
+    return tf.abs(tf.floormod(v, 2.0) - 1.0)
+  elif mode == "clamp":
+    return clamp(v)
+
+@op_scope
+def iround(u):
+  return tf.to_int32(tf.floordiv(tf.to_float(u), 1.0))
+
+@op_scope
+def sample(tex, uv, mode="bilinear", wrap_mode="reflect"):
   assert mode in ["nearest", "bilinear"]
+  wh = tf.shape(tex)
+  get = lambda u, v: unpack_colors(tf.gather_nd(tex, tf.stack([
+    clamp(iround(u), 0, wh[0] - 1),
+    clamp(iround(v), 0, wh[1] - 1),
+    ], 1)), 1)
   if mode == "nearest":
-    uv = clamp(uv, 0., 1.) * tf.to_float(tf.shape(tex) - 1)
-    return unpack_colors(tf.gather_nd(tex, tf.to_int32(uv)), 1)
+    uv = wrap(uv, wrap_mode) * tf.to_float(tf.shape(tex))
+    u = uv[:, 0]
+    v = uv[:, 1]
+    return get(u, v)
   elif mode == "bilinear":
     # https://github.com/pytorch/pytorch/blob/f064c5aa33483061a48994608d890b968ae53fb5/aten/src/THNN/generic/SpatialGridSamplerBilinear.c#L105
-    wh = tf.shape(tex)
-    uv = clamp(uv, 0., 1.) * tf.to_float(wh - 1)
-    ix = uv[:, 0]
-    iy = uv[:, 1]
+    uv = wrap(uv, wrap_mode) * tf.to_float(wh)
+    ix = uv[:, 0] - 0.5
+    iy = uv[:, 1] - 0.5
 
     # get NE, NW, SE, SW pixel values from (x, y)
-    ix_nw = tf.to_int32(ix)
-    iy_nw = tf.to_int32(iy)
+    ix_nw = iround(ix)
+    iy_nw = iround(iy)
     ix_ne = ix_nw + 1
     iy_ne = iy_nw
     ix_sw = ix_nw
@@ -77,9 +97,6 @@ def sample(tex, uv, mode="bilinear"):
     iy_se = iy_nw + 1
 
     sub = lambda a, b: tf.to_float(a) - tf.to_float(b)
-    get = lambda u, v: unpack_colors(tf.gather_nd(tex, tf.stack([
-      clamp(u, 0, wh[0] - 1),
-      clamp(v, 0, wh[1] - 1)], 1)), 1)
 
     # get surfaces to each neighbor:
     nw = sub(ix_se , ix)    * sub(iy_se , iy);
@@ -91,6 +108,7 @@ def sample(tex, uv, mode="bilinear"):
     ne_val = get(ix_ne, iy_ne)
     sw_val = get(ix_sw, iy_sw)
     se_val = get(ix_se, iy_se)
+
     a = lambda x: x[:, tf.newaxis]
     out = nw_val * a(nw)
     out += ne_val * a(ne)
