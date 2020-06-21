@@ -166,14 +166,8 @@ class Renderer(object):
 
         for i in range(3):
             verts[i] = shader.vertex(indices[:, i], i)
-            #import pdb; pdb.set_trace()
-            #with tf.control_dependencies([tf.print([i, indices[:, i], verts[i]])]):
-            #with tf.control_dependencies([tf.print([i, verts[i][0]])]):
             verts[i] = tf.matmul(verts[i], self.viewport, transpose_b=True)
-            ndc[i] = verts[i]
             verts[i] = utils.affine_to_cartesian(verts[i])
-        #with tf.control_dependencies([tf.print([i, verts[0][0]])]):
-        #  verts[0] = tf.identity(verts[0])
 
         bbmin, bbmax = bounds(verts, self.width, self.height)
 
@@ -183,9 +177,6 @@ class Renderer(object):
             verts_i = [tf.gather(verts[0], i),
                        tf.gather(verts[1], i),
                        tf.gather(verts[2], i)]
-            # ndc_i = [tf.gather(ndc[0], i),
-            #          tf.gather(ndc[1], i),
-            #          tf.gather(ndc[2], i)]
 
             iround = lambda x: tf.floor(x + 0.5)
 
@@ -199,14 +190,11 @@ class Renderer(object):
 
             bc, valid = barycentric(verts_i, p)
 
-            #bc = tf_prn(bc, bbmin_i, bbmax_i, i, [0, verts_i[0], tf.shape(bc[0])], [1, verts_i[1], tf.shape(bc[1])], [2, verts_i[2], tf.shape(bc[2])], tf.shape(p))
-
             p = tf.boolean_mask(p, valid)
             bc = [tf.boolean_mask(bc[k], valid) for k in range(3)]
             z = utils.tri_dot([verts_i[k][2] for k in range(3)], bc)
 
             inds = tf.to_int32(tf.stack([p[:, 1], p[:, 0]], axis=1))
-            #cur_z = tf.gather_nd(self.depth, inds)
             cur_z = tf.gather_nd(depth, inds)
             visible = tf.less_equal(cur_z, z)
 
@@ -216,15 +204,8 @@ class Renderer(object):
 
             c = utils.pack_colors(shader.fragment(bc, i), 1)
 
-            if False:
-              updates = [
-                  tf.scatter_nd_update(self.color, inds, c, use_locking=False),
-                  tf.scatter_nd_update(self.depth, inds, z, use_locking=False)
-              ]
-              return updates, self.color, self.depth
-            else:
-              updates = [tf.no_op()]
-              return updates, tf.tensor_scatter_update(color, inds, c), tf.tensor_scatter_update(depth, inds, z)
+            updates = []
+            return updates, tf.tensor_scatter_update(color, inds, c), tf.tensor_scatter_update(depth, inds, z)
 
 
         num_faces = tf.shape(indices)[0]
