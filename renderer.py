@@ -100,11 +100,6 @@ class Shader(object):
     def fragment(self, unused_bc, unused_i):
         raise NotImplementedError("Fragment program not implemented")
 
-@utils.op_scope
-def tf_prn(x, *args):
-  with tf.control_dependencies([tf.print(*args)]):
-    return tf.identity(x)
-
 class Renderer(object):
     """Renderer class."""
 
@@ -183,18 +178,20 @@ class Renderer(object):
             x, y = tf.meshgrid(tf.range(iround(bbmin_i[0]), iround(bbmax_i[0]) + 1.0),
                                tf.range(iround(bbmin_i[1]), iround(bbmax_i[1]) + 1.0))
 
+            off = 0.5
+            off = 1.0
             num_frags = tf.reduce_prod(tf.shape(x))
             p = tf.stack([tf.reshape(x, [-1]),
                           tf.reshape(y, [-1]),
                           tf.zeros([num_frags], dtype=tf.float32)], axis=1)
-            px = tf.stack([tf.reshape(x, [-1])+0.5,
+            px = tf.stack([tf.reshape(x, [-1])+off,
                            tf.reshape(y, [-1]),
                            tf.zeros([num_frags], dtype=tf.float32)], axis=1)
             py = tf.stack([tf.reshape(x, [-1]),
-                           tf.reshape(y, [-1])+0.5,
+                           tf.reshape(y, [-1])+off,
                            tf.zeros([num_frags], dtype=tf.float32)], axis=1)
-            pxy = tf.stack([tf.reshape(x, [-1])+0.5,
-                            tf.reshape(y, [-1])+0.5,
+            pxy = tf.stack([tf.reshape(x, [-1])+off,
+                            tf.reshape(y, [-1])+off,
                             tf.zeros([num_frags], dtype=tf.float32)], axis=1)
 
             bc, valid = barycentric(verts_i, p)

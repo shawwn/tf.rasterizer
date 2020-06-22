@@ -43,16 +43,21 @@ class App(object):
         image = image.convert("RGB")
         image = image.transpose(Image.FLIP_TOP_BOTTOM)
         self.texture = np.array(image, dtype=np.float32)
+        cs = lambda i: np.cumsum(np.cumsum(self.texture[:, :, i] / 255.0, 0), 1)
+        self.texture_sum = np.stack([ cs(0), cs(1), cs(2), ], 2)
 
         # Create renderer
         self.rend = renderer.Renderer(width, height)
         self.texture_in = tf.get_variable(
             "texture_in", shape=self.texture.shape, dtype=tf.float32, use_resource=True)
+        self.texture_sum_in = tf.get_variable(
+            "texture_sum_in", shape=self.texture_sum.shape, dtype=tf.float32, use_resource=True)
         #self.rend.session.run(tf.assign(self.texture_in, self.texture))
         self.rend.init()
         tflex.assign_values([self.texture_in], [self.texture], session=self.rend.session)
+        tflex.assign_values([self.texture_sum_in], [self.texture_sum], session=self.rend.session)
         self.clear = self.rend.clear_fn()
-        self.draw = self.rend.draw_fn(shaders.TexturedLitShader(self.texture_in))
+        self.draw = self.rend.draw_fn(shaders.TexturedLitShader(self.texture_in, self.texture_sum_in))
         self.rend.finalize()
 
         self.start_time = self.last_time = time.time()

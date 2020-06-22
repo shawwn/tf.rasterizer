@@ -68,13 +68,14 @@ def iround(u):
   return tf.to_int32(tf.floordiv(tf.to_float(u), 1.0))
 
 @op_scope
-def sample(tex, uv, mode="bilinear", wrap_mode="reflect"):
+def sample(tex, uv, mode="bilinear", wrap_mode="reflect", unpack=True):
   assert mode in ["nearest", "bilinear"]
-  wh = tf.shape(tex)
-  get = lambda u, v: unpack_colors(tf.gather_nd(tex, tf.stack([
+  wh = tf.shape(tex if unpack else tex[:, :, 0])
+  grab = lambda u, v: tf.gather_nd(tex, tf.stack([
     clamp(iround(u), 0, wh[0] - 1),
     clamp(iround(v), 0, wh[1] - 1),
-    ], 1)), 1)
+    ], 1))
+  get = lambda u, v: (unpack_colors(grab(u, v), 1) if unpack else grab(u, v))
   if mode == "nearest":
     uv = wrap(uv, wrap_mode) * tf.to_float(wh)
     u = uv[:, 0]
@@ -182,3 +183,9 @@ def sequential_for(fn, begin, end, *args):
 @op_scope
 def affine_to_cartesian(points):
     return points[:, :3] / tf.expand_dims(points[:, 3], 1)
+
+
+@op_scope
+def tf_prn(x, *args):
+  with tf.control_dependencies([tf.print(*args)]):
+    return tf.identity(x)

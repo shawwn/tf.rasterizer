@@ -13,11 +13,40 @@ import utils
 class TexturedLitShader(renderer.Shader):
     """Textured shader class."""
 
-    def __init__(self, texture=None):
+    def __init__(self, texture=None, texture_sum=None):
         self.vertices = tf.placeholder(tf.float32, [None, 3])
         self.normals = tf.placeholder(tf.float32, [None, 3])
         self.uvs = tf.placeholder(tf.float32, [None, 2])
         self.texture = tf.placeholder(tf.float32, [None, None, 3]) if texture is None else texture
+        #self.texture_op = self.texture / 255.0
+        self.texture_sum = texture_sum
+        # cs = lambda i: tf.cumsum(tf.cumsum(self.texture[:, :, i] / 255.0, exclusive=True), 1, exclusive=True) 
+        # self.texture_sum = tf.stack([
+        #   cs(0),
+        #   cs(1),
+        #   cs(2),
+        #   ], 2)
+        # self.texture_sum_x = tf.stack([
+        #   tf.cumsum(self.texture[:, :, 0] / 255.0, 0),
+        #   tf.cumsum(self.texture[:, :, 1] / 255.0, 0),
+        #   tf.cumsum(self.texture[:, :, 2] / 255.0, 0),
+        #   ], 2)
+        # # self.texture_sum_y = tf.stack([
+        # #   tf.cumsum(self.texture[:, :, 0] / 255.0, 1),
+        # #   tf.cumsum(self.texture[:, :, 1] / 255.0, 1),
+        # #   tf.cumsum(self.texture[:, :, 2] / 255.0, 1),
+        # #   ], 2)
+        # # self.texture_sum = tf.stack([
+        # #   self.texture_sum_x[:, :, 0] + self.texture_sum_y[:, :, 0],
+        # #   self.texture_sum_x[:, :, 1] + self.texture_sum_y[:, :, 1],
+        # #   self.texture_sum_x[:, :, 2] + self.texture_sum_y[:, :, 2],
+        # #   ], 2)
+        # self.texture_sum = tf.stack([
+        #   tf.cumsum(self.texture_sum_x[:, :, 0], 1),
+        #   tf.cumsum(self.texture_sum_x[:, :, 1], 1),
+        #   tf.cumsum(self.texture_sum_x[:, :, 2], 1),
+        #   ], 2)
+        # # self.texture_sum = tf.cumsum(self.texture / 255.0, 2)
 
         default_light_dir = np.array([-1, -1, -1], dtype=np.float32)
         default_ambient = np.array([0.5, 0.5, 0.5], dtype=np.float32)
@@ -94,12 +123,45 @@ class TexturedLitShader(renderer.Shader):
         l = tf.expand_dims(tf.nn.l2_normalize(self.light_dir, 0), 1)
         d = utils.clamp(tf.matmul(norm, l), 0., 1.)
         uv, uv_x, uv_y, uv_xy = self.varying(w, self.varying_uv, bc, i, 2, bcx, bcy, bcxy)
-        tex_0 = utils.sample(self.packed_texture, uv, "nearest")
+        #tex_0 = utils.sample(self.packed_texture, uv, "nearest")
+        wh = tf.to_float(tf.shape(self.texture_sum[:, :, 0]))
+        uv_00 = tf.reduce_min([uv, uv_x, uv_y, uv_xy], axis=0)
+        uv_11 = tf.reduce_max([uv, uv_x, uv_y, uv_xy], axis=0)
+        uv_01 = tf.stack([uv_00[:, 0], uv_11[:, 1]], 1)
+        uv_10 = tf.stack([uv_11[:, 0], uv_00[:, 1]], 1)
+        #import pdb; pdb.set_trace()
+        R = wh[0]*(uv_11[:, 0] - uv_00[:, 0]) * wh[1]*(uv_11[:, 1] - uv_00[:, 1])
+        #uv_h = tf.stack([uv_11[:, 0], uv_00[:, 1]], 1)
+        #R = tf.reduce_prod((uv_11 - uv_00) * tf.to_float(wh)) / 4
+        #R = 100
+        #pw = uv_11[:, 0]
+
+        # AREA filtering
+        tex_00 = utils.sample(self.texture_sum, uv_00, "bilinear", unpack=False)
+        tex_10 = utils.sample(self.texture_sum, uv_10, "bilinear", unpack=False)
+        tex_01 = utils.sample(self.texture_sum, uv_01, "bilinear", unpack=False)
+        tex_11 = utils.sample(self.texture_sum, uv_11, "bilinear", unpack=False)
+        den = tf.cond(tf.greater(tf.shape(R)[0], 1), lambda: R[i], lambda: wh[0]*wh[1])
+        #R = utils.tf_prn(R, i, R[i])
+        den = utils.tf_prn(den, i, den)
+        return (tex_11 - tex_10 - tex_01 + tex_00) / den
+        # #tex_0 = utils.sample(self.texture_sum, uv, "nearest", unpack=False)
+        # #tex_x = utils.sample(self.texture_sum, uv_x, "nearest", unpack=False)
+        # #tex_y = utils.sample(self.texture_sum, uv_y, "nearest", unpack=False)
+        # #tex_xy = utils.sample(self.texture_sum, uv_xy, "nearest", unpack=False)
+        # #return (tex_xy - tex_x - tex_y + tex_0)
+        # A = tex_0
+        # D = tex_x
+        # B = tex_xy
+        # C = tex_y
+        # return (B - C - D + A)
+        # #import pdb; pdb.set_trace()
+        # #return tf.concat([uv, tf.zeros_like(tex_0[:, 0])[:, tf.newaxis]], 1)
+        #return tex_0 / (1024*100)
         tex_x = utils.sample(self.packed_texture, uv_x, "nearest")
         tex_y = utils.sample(self.packed_texture, uv_y, "nearest")
         tex_xy = utils.sample(self.packed_texture, uv_xy, "nearest")
         tex = 0.25 * (tex_0 + tex_x + tex_y + tex_xy)
-        result = (self.ambient + self.diffuse * d) * tex
-        #return result
-        #return tf.concat([uv, tf.zeros_like(tex[:, 0])[:, tf.newaxis]], 1)
         return tex
+        result = (self.ambient + self.diffuse * d) * tex
+        return result
