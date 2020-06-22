@@ -187,11 +187,26 @@ class Renderer(object):
             p = tf.stack([tf.reshape(x, [-1]),
                           tf.reshape(y, [-1]),
                           tf.zeros([num_frags], dtype=tf.float32)], axis=1)
+            px = tf.stack([tf.reshape(x, [-1])+0.5,
+                           tf.reshape(y, [-1]),
+                           tf.zeros([num_frags], dtype=tf.float32)], axis=1)
+            py = tf.stack([tf.reshape(x, [-1]),
+                           tf.reshape(y, [-1])+0.5,
+                           tf.zeros([num_frags], dtype=tf.float32)], axis=1)
+            pxy = tf.stack([tf.reshape(x, [-1])+0.5,
+                            tf.reshape(y, [-1])+0.5,
+                            tf.zeros([num_frags], dtype=tf.float32)], axis=1)
 
             bc, valid = barycentric(verts_i, p)
+            bcx, valid = barycentric(verts_i, px)
+            bcy, valid = barycentric(verts_i, py)
+            bcxy, valid = barycentric(verts_i, pxy)
 
             p = tf.boolean_mask(p, valid)
             bc = [tf.boolean_mask(bc[k], valid) for k in range(3)]
+            bcx = [tf.boolean_mask(bcx[k], valid) for k in range(3)]
+            bcy = [tf.boolean_mask(bcy[k], valid) for k in range(3)]
+            bcxy = [tf.boolean_mask(bcxy[k], valid) for k in range(3)]
             z = utils.tri_dot([verts_i[k][2] for k in range(3)], bc)
 
             inds = tf.to_int32(tf.stack([p[:, 1], p[:, 0]], axis=1))
@@ -200,9 +215,12 @@ class Renderer(object):
 
             inds = tf.boolean_mask(inds, visible)
             bc = [tf.boolean_mask(bc[k], visible) for k in range(3)]
+            bcx = [tf.boolean_mask(bcx[k], visible) for k in range(3)]
+            bcy = [tf.boolean_mask(bcy[k], visible) for k in range(3)]
+            bcxy = [tf.boolean_mask(bcxy[k], visible) for k in range(3)]
             z = tf.boolean_mask(z, visible)
 
-            c = utils.pack_colors(shader.fragment(bc, i), 1)
+            c = utils.pack_colors(shader.fragment(bc, i, bcx, bcy, bcxy), 1)
 
             updates = []
             return updates, tf.tensor_scatter_update(color, inds, c), tf.tensor_scatter_update(depth, inds, z)

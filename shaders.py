@@ -69,22 +69,37 @@ class TexturedLitShader(renderer.Shader):
         return pos
 
     @utils.op_scope
-    def varying(self, w, v, bc, i, k):
+    def varying(self, w, v, bc, i, k, bcx, bcy, bcxy):
         tc = utils.tri_dot(utils.tri_gather(v, i), bc)
         tc *= tf.stack([w for _ in range(k)], 1)
-        return tc
+        tcx = utils.tri_dot(utils.tri_gather(v, i), bcx)
+        tcx *= tf.stack([w for _ in range(k)], 1)
+        tcy = utils.tri_dot(utils.tri_gather(v, i), bcy)
+        tcy *= tf.stack([w for _ in range(k)], 1)
+        tcxy = utils.tri_dot(utils.tri_gather(v, i), bcxy)
+        tcxy *= tf.stack([w for _ in range(k)], 1)
+        return tc, tcx, tcy, tcxy
 
     @utils.op_scope
-    def fragment(self, bc, i):
+    def fragment(self, bc, i, bcx, bcy, bcxy):
         num_frags = tf.shape(bc[0])[0]
         bc = utils.tri_expand_dims(bc, 1)
+        bcx = utils.tri_expand_dims(bcx, 1)
+        bcy = utils.tri_expand_dims(bcy, 1)
+        bcxy = utils.tri_expand_dims(bcxy, 1)
         pos = utils.tri_dot(utils.tri_gather(self.varying_pos, i), bc)
         w = 1.0 / pos[:, 3]
-        norm = self.varying(w, self.varying_norm, bc, i, 3)
+        norm, norm_x, norm_y, norm_xy = self.varying(w, self.varying_norm, bc, i, 3, bcx, bcy, bcxy)
         norm = tf.nn.l2_normalize(norm, 1)
         l = tf.expand_dims(tf.nn.l2_normalize(self.light_dir, 0), 1)
         d = utils.clamp(tf.matmul(norm, l), 0., 1.)
-        uv = self.varying(w, self.varying_uv, bc, i, 2)
-        tex = utils.sample(self.packed_texture, uv)
+        uv, uv_x, uv_y, uv_xy = self.varying(w, self.varying_uv, bc, i, 2, bcx, bcy, bcxy)
+        tex_0 = utils.sample(self.packed_texture, uv, "nearest")
+        tex_x = utils.sample(self.packed_texture, uv_x, "nearest")
+        tex_y = utils.sample(self.packed_texture, uv_y, "nearest")
+        tex_xy = utils.sample(self.packed_texture, uv_xy, "nearest")
+        tex = 0.25 * (tex_0 + tex_x + tex_y + tex_xy)
         result = (self.ambient + self.diffuse * d) * tex
-        return result
+        #return result
+        #return tf.concat([uv, tf.zeros_like(tex[:, 0])[:, tf.newaxis]], 1)
+        return tex

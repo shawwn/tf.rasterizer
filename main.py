@@ -22,9 +22,9 @@ import m
 class App(object):
     """Application."""
 
-    #def __init__(self, width=256, height=256, upscale=1):
     #def __init__(self, width=1024, height=720, upscale=1):
-    def __init__(self, width=16, height=16, upscale=8):
+    #def __init__(self, width=16, height=16, upscale=8):
+    def __init__(self, width=256, height=256, upscale=1):
         # Create a window
         self.win = window.Window(width, height, "App", upscale=upscale)
 
@@ -38,8 +38,8 @@ class App(object):
         self.uvs = mesh.meshes[0].texturecoords[0, :, 1::-1]
 
         # Load texture
-        #image = Image.open("data/african_head/african_head_diffuse.tga")#.resize([32,32])
-        image = Image.open("data/smile.png")
+        image = Image.open("data/african_head/african_head_diffuse.tga")#.resize([32,32])
+        #image = Image.open("data/smile.png")
         image = image.convert("RGB")
         image = image.transpose(Image.FLIP_TOP_BOTTOM)
         self.texture = np.array(image, dtype=np.float32)
@@ -76,6 +76,7 @@ class App(object):
         cam.look_at( m.MVec3(0.0, 0.0, 1.5), m.MVec3(0,0,0))
         #world = m.MMat4x4(utils.rotation(0., theta, 0.0))
         world = m.MMat4x4(utils.rotation(0., m.deg_to_rad(90.0), 0.0))
+        world.scale = m.MVec3(1-(0.2+np.abs(np.sin(theta))), 1-(0.2+np.abs(np.sin(theta))), 1.0)
         inv_world = world.inverse()
         wvp = cam.view_proj_matrix * world
         norm = cam.normal_matrix
