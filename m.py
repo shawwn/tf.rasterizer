@@ -212,10 +212,11 @@ class MMat3x3(MData):
     return self.__class__(np.matmul(self._data, _data(m, self._data.dtype)))
 
   def rotate_point(self, point):
+    point = _data(point, self._data.dtype)
     return MVec3(
-      self.get_at( 0 ) * point.x + self.get_at( 1 ) * point.y + self.get_at( 2 ) * point.z,
-      self.get_at( 3 ) * point.x + self.get_at( 4 ) * point.y + self.get_at( 5 ) * point.z,
-      self.get_at( 6 ) * point.x + self.get_at( 7 ) * point.y + self.get_at( 8 ) * point.z )
+      self.get_at( 0 ) * point[0] + self.get_at( 1 ) * point[1] + self.get_at( 2 ) * point[2],
+      self.get_at( 3 ) * point[0] + self.get_at( 4 ) * point[1] + self.get_at( 5 ) * point[2],
+      self.get_at( 6 ) * point[0] + self.get_at( 7 ) * point[1] + self.get_at( 8 ) * point[2] )
 
   def rotate_point_fast(self, point):
     x = self.get_at( 0 ) * point.x + self.get_at( 1 ) * point.y + self.get_at( 2 ) * point.z;

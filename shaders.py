@@ -19,34 +19,7 @@ class TexturedLitShader(renderer.Shader):
         self.uvs = tf.placeholder(tf.float32, [None, 2])
         self.texture = tf.placeholder(tf.float32, [None, None, 3]) if texture is None else texture
         #self.texture_op = self.texture / 255.0
-        self.texture_sum = texture_sum
-        # cs = lambda i: tf.cumsum(tf.cumsum(self.texture[:, :, i] / 255.0, exclusive=True), 1, exclusive=True) 
-        # self.texture_sum = tf.stack([
-        #   cs(0),
-        #   cs(1),
-        #   cs(2),
-        #   ], 2)
-        # self.texture_sum_x = tf.stack([
-        #   tf.cumsum(self.texture[:, :, 0] / 255.0, 0),
-        #   tf.cumsum(self.texture[:, :, 1] / 255.0, 0),
-        #   tf.cumsum(self.texture[:, :, 2] / 255.0, 0),
-        #   ], 2)
-        # # self.texture_sum_y = tf.stack([
-        # #   tf.cumsum(self.texture[:, :, 0] / 255.0, 1),
-        # #   tf.cumsum(self.texture[:, :, 1] / 255.0, 1),
-        # #   tf.cumsum(self.texture[:, :, 2] / 255.0, 1),
-        # #   ], 2)
-        # # self.texture_sum = tf.stack([
-        # #   self.texture_sum_x[:, :, 0] + self.texture_sum_y[:, :, 0],
-        # #   self.texture_sum_x[:, :, 1] + self.texture_sum_y[:, :, 1],
-        # #   self.texture_sum_x[:, :, 2] + self.texture_sum_y[:, :, 2],
-        # #   ], 2)
-        # self.texture_sum = tf.stack([
-        #   tf.cumsum(self.texture_sum_x[:, :, 0], 1),
-        #   tf.cumsum(self.texture_sum_x[:, :, 1], 1),
-        #   tf.cumsum(self.texture_sum_x[:, :, 2], 1),
-        #   ], 2)
-        # # self.texture_sum = tf.cumsum(self.texture / 255.0, 2)
+        self.texture_sum = texture_sum if texture_sum is not None else tf.cumsum(tf.cumsum(self.texture / 255.0, 0), 1)
 
         default_light_dir = np.array([-1, -1, -1], dtype=np.float32)
         default_ambient = np.array([0.5, 0.5, 0.5], dtype=np.float32)
@@ -123,7 +96,8 @@ class TexturedLitShader(renderer.Shader):
         l = tf.expand_dims(tf.nn.l2_normalize(self.light_dir, 0), 1)
         d = utils.clamp(tf.matmul(norm, l), 0., 1.)
         uv, uv_x, uv_y, uv_xy = self.varying(w, self.varying_uv, bc, i, 2, bcx, bcy, bcxy)
-        #tex_0 = utils.sample(self.packed_texture, uv, "nearest")
+        tex_0 = utils.sample(self.packed_texture, uv, "nearest")
+        return tex_0 # why does area sampling fail with a slice out of bounds error?
         wh = tf.to_float(tf.shape(self.texture_sum[:, :, 0]))
         uv_00 = tf.reduce_min([uv, uv_x, uv_y, uv_xy], axis=0)
         uv_11 = tf.reduce_max([uv, uv_x, uv_y, uv_xy], axis=0)

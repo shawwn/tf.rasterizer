@@ -29,9 +29,9 @@ class App(object):
         self.win = window.Window(width, height, "App", upscale=upscale)
 
         # Load mesh
-        #mesh = pyassimp.load("data/african_head/african_head.obj")
+        mesh = pyassimp.load("data/african_head/african_head.obj")
         #mesh = pyassimp.load("data/african_head/box.obj")
-        mesh = pyassimp.load("data/quad.obj")
+        #mesh = pyassimp.load("data/quad.obj")
         self.indices = mesh.meshes[0].faces
         self.vertices = mesh.meshes[0].vertices
         self.normals = mesh.meshes[0].normals
@@ -57,7 +57,10 @@ class App(object):
         tflex.assign_values([self.texture_in], [self.texture], session=self.rend.session)
         tflex.assign_values([self.texture_sum_in], [self.texture_sum], session=self.rend.session)
         self.clear = self.rend.clear_fn()
-        self.draw = self.rend.draw_fn(shaders.TexturedLitShader(self.texture_in, self.texture_sum_in))
+        if "precompute_areasum":
+          self.draw = self.rend.draw_fn(shaders.TexturedLitShader(self.texture_in, self.texture_sum_in))
+        else:
+          self.draw = self.rend.draw_fn(shaders.TexturedLitShader(self.texture_in))
         self.rend.finalize()
 
         self.start_time = self.last_time = time.time()
@@ -80,7 +83,7 @@ class App(object):
         cam.proj = proj
         cam.look_at( m.MVec3(0.0, 0.0, 1.5), m.MVec3(0,0,0))
         #world = m.MMat4x4(utils.rotation(0., theta, 0.0))
-        world = m.MMat4x4(utils.rotation(0., m.deg_to_rad(90.0), 0.0))
+        world = m.MMat4x4(utils.rotation(0., m.deg_to_rad(90.0) + elapsed, 0.0))
         world.scale = m.MVec3(1-(0.2+np.abs(np.sin(theta))), 1-(0.2+np.abs(np.sin(theta))), 1.0)
         inv_world = world.inverse()
         wvp = cam.view_proj_matrix * world
