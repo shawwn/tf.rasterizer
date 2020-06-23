@@ -28,9 +28,9 @@ class App(object):
         self.win = window.Window(width, height, "App")
 
         # Load mesh
-        #mesh = pyassimp.load("data/african_head/african_head.obj")
+        mesh = pyassimp.load("data/african_head/african_head.obj")
         #mesh = pyassimp.load("data/african_head/box.obj")
-        mesh = pyassimp.load("data/quad.obj")
+        #mesh = pyassimp.load("data/quad.obj")
         self.indices = mesh.meshes[0].faces
         self.vertices = mesh.meshes[0].vertices
         self.normals = mesh.meshes[0].normals
