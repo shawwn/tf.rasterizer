@@ -6,11 +6,13 @@ from __future__ import print_function
 
 import numpy as np
 import tensorflow as tf
+import functools
 
 
 def op_scope(fn, name=None):
     if name is None:
         name = fn.__name__
+    @functools.wraps(fn)
     def _fn(*args, **kwargs):
         with tf.name_scope(fn.__name__):
             return fn(*args, **kwargs)
